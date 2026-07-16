@@ -68,7 +68,7 @@ socket.on("connect", () => {
       console.log("ICE Gathering:", peer.iceGatheringState);
     };    
 
-    peer.ondatachannel = (event) => {
+    peer.ondatachannel = (event:RTCDataChannelEvent) => {
       console.log("DataChannel Received");
       const channel = event.channel;
       setDataChannel(channel);
@@ -80,12 +80,12 @@ socket.on("connect", () => {
         console.log("DataChannel Closed");
       };
 
-      channel.onerror = (err) => {
+      channel.onerror = (err:Event) => {
         console.error("DataChannel Error", err);
       };
 
-      channel.onmessage = (event) => {
-    handleIncomingData(event, (progress) => {
+      channel.onmessage = (event:MessageEvent) => {
+    handleIncomingData(event, (progress:number) => {
         console.log(progress);
         setReceiveProgress(progress);
     });
@@ -94,7 +94,7 @@ socket.on("connect", () => {
 
     
 
-    peer.onicecandidate = (event) => {
+    peer.onicecandidate = (event:RTCPeerConnectionIceEvent) => {
       if (!event.candidate) {
         console.log("ICE Gathering Complete");
         return;
@@ -132,11 +132,11 @@ socket.on("connect", () => {
         channel.onclose = () => {
           console.log("DataChannel Closed");
         };
-        channel.onerror = (err) => {
+        channel.onerror = (err:Event) => {
           console.error(err);
         };
-        channel.onmessage = (event) => {
-    handleIncomingData(event, (progress) => {
+        channel.onmessage = (event:MessageEvent) => {
+    handleIncomingData(event, (progress:number) => {
         console.log(progress);
         setReceiveProgress(progress);
     });
@@ -278,7 +278,7 @@ socket.on("connect", () => {
               className="hidden"
               onChange={(e) => {
                 if (!e.target.files?.length) return;
-                sendFile(e.target.files[0], (progress) => {
+                sendFile(e.target.files[0], (progress:number) => {
                   setSendProgress(progress);
                 });
               }}
