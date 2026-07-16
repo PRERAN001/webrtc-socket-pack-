@@ -1,4 +1,6 @@
 # ByteDrop
+<img width="1774" height="887" alt="image" src="https://github.com/user-attachments/assets/10aec748-56d1-4983-ac9b-41ecb5ab36bb" />
+
 
 ByteDrop is a peer-to-peer file sharing application built with **Next.js**, **WebRTC**, and **Socket.IO**. Instead of routing files through a server, ByteDrop establishes a direct encrypted connection between two browsers, enabling fast and secure file transfers with minimal latency.
 
