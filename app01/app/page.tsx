@@ -7,8 +7,9 @@ import { setDataChannel, getDataChannel } from "@/lib/channel";
 import { handleIncomingData } from "../lib/filetransfer";
 import { sendFile } from "../lib/filetransfer";
 import { sendMessage } from "../lib/filetransfer";
-
+import { setWritable } from "@/lib/filetransfer";
 export default function Home() {
+ 
   const [roomId, setRoomId] = useState("");
   const [status, setStatus] = useState("Connecting...");
   const [socketId, setSocketId] = useState("");
@@ -16,24 +17,28 @@ export default function Home() {
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const [sendProgress, setSendProgress] = useState(0);
   const [receiveProgress, setReceiveProgress] = useState(0);
-
+  const [incomingTransfer, setIncomingTransfer] = useState<{
+    name: string;
+    size: number;
+    mime: string;
+  } | null>(null);
+ 
   useEffect(() => {
-    
-const peer = getPeer();
+    const peer = getPeer();
 
-console.log("2. Peer Created");
+    console.log("2. Peer Created");
 
-peerRef.current = peer;
+    peerRef.current = peer;
 
-console.log("3. Connecting Socket");
+    console.log("3. Connecting Socket");
 
-socket.connect();
+    socket.connect();
 
-console.log("4. socket.connect() returned");
+    console.log("4. socket.connect() returned");
 
-socket.on("connect", () => {
-  console.log("5. Socket Connected");
-});
+    socket.on("connect", () => {
+      console.log("5. Socket Connected");
+    });
 
     socket.on("connect", () => {
       console.log("Socket Connected:", socket.id);
@@ -49,7 +54,7 @@ socket.on("connect", () => {
 
     socket.on("room-joined", (room) => {
       console.log("Joined Room:", room);
-    });    
+    });
 
     peer.onconnectionstatechange = () => {
       console.log("Connection:", peer.connectionState);
@@ -66,9 +71,9 @@ socket.on("connect", () => {
 
     peer.onicegatheringstatechange = () => {
       console.log("ICE Gathering:", peer.iceGatheringState);
-    };    
+    };
 
-    peer.ondatachannel = (event:RTCDataChannelEvent) => {
+    peer.ondatachannel = (event: RTCDataChannelEvent) => {
       console.log("DataChannel Received");
       const channel = event.channel;
       setDataChannel(channel);
@@ -80,21 +85,21 @@ socket.on("connect", () => {
         console.log("DataChannel Closed");
       };
 
-      channel.onerror = (err:Event) => {
+      channel.onerror = (err: Event) => {
         console.error("DataChannel Error", err);
       };
 
-      channel.onmessage = async (event:MessageEvent) => {
-    await handleIncomingData(event, (progress:number) => {
-        console.log(progress);
-        setReceiveProgress(progress);
-    });
-};
+      channel.onmessage = async (event: MessageEvent) => {
+        await handleIncomingData(event, (progress: number) => {
+          console.log(progress);
+          setReceiveProgress(progress);
+        }
+        ,setIncomingTransfer
+      );
+      };
     };
 
-    
-
-    peer.onicecandidate = (event:RTCPeerConnectionIceEvent) => {
+    peer.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
       if (!event.candidate) {
         console.log("ICE Gathering Complete");
         return;
@@ -118,8 +123,6 @@ socket.on("connect", () => {
       }
     });
 
-
-
     socket.on("user-joined", async (id) => {
       console.log("Peer Joined:", id);
       try {
@@ -132,15 +135,15 @@ socket.on("connect", () => {
         channel.onclose = () => {
           console.log("DataChannel Closed");
         };
-        channel.onerror = (err:Event) => {
+        channel.onerror = (err: Event) => {
           console.error(err);
         };
-        channel.onmessage =async (event:MessageEvent) => {
-        await handleIncomingData(event, (progress:number) => {
-        console.log(progress);
-        setReceiveProgress(progress);
-    });
-};
+        channel.onmessage = async (event: MessageEvent) => {
+          await handleIncomingData(event, (progress: number) => {
+            console.log(progress);
+            setReceiveProgress(progress);
+          },setIncomingTransfer);
+        };
 
         console.log("Creating Offer");
         const offer = await peer.createOffer();
@@ -174,7 +177,7 @@ socket.on("connect", () => {
       } catch (err) {
         console.error(err);
       }
-    });   
+    });
 
     socket.on("answer", async (answer) => {
       try {
@@ -208,7 +211,6 @@ socket.on("connect", () => {
   return (
     <main className="min-h-screen bg-white text-black dark:bg-black dark:text-white flex justify-center items-center p-4 sm:p-6 transition-colors duration-200">
       <div className="w-full max-w-xl rounded-2xl border border-neutral-200 bg-white p-6 sm:p-8 space-y-6 shadow-xl dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none">
-        
         {/* Header */}
         <div>
           <h1 className="text-3xl font-black tracking-tight uppercase">
@@ -267,7 +269,10 @@ socket.on("connect", () => {
           <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-neutral-300 rounded-xl cursor-pointer bg-neutral-50 hover:bg-neutral-100 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800/50 transition-colors">
             <div className="flex flex-col items-center justify-center pt-5 pb-6">
               <p className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                <span className="font-bold text-black dark:text-white">Click to upload</span> or drag and drop
+                <span className="font-bold text-black dark:text-white">
+                  Click to upload
+                </span>{" "}
+                or drag and drop
               </p>
             </div>
             <input
@@ -275,7 +280,7 @@ socket.on("connect", () => {
               className="hidden"
               onChange={(e) => {
                 if (!e.target.files?.length) return;
-                sendFile(e.target.files[0], (progress:number) => {
+                sendFile(e.target.files[0], (progress: number) => {
                   setSendProgress(progress);
                 });
               }}
@@ -317,6 +322,113 @@ socket.on("connect", () => {
           </div>
         </div>
       </div>
+      {incomingTransfer && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 shadow-2xl p-6 space-y-6">
+            <div className="space-y-2">
+              <h2 className="text-xl font-black uppercase tracking-tight">
+                Incoming File
+              </h2>
+
+              <p className="text-sm text-neutral-500">
+                Someone wants to send you a file.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 p-4 space-y-2">
+              <div className="flex justify-between">
+                <span className="text-neutral-500 text-sm">Name</span>
+                <span className="font-semibold break-all">
+                  {incomingTransfer.name}
+                </span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-neutral-500 text-sm">Size</span>
+
+                <span className="font-semibold">
+                  {(incomingTransfer.size / (1024 * 1024)).toFixed(2)} MB
+                </span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-neutral-500 text-sm">Type</span>
+
+                <span className="font-semibold">
+                  {incomingTransfer.mime || "Unknown"}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                className="flex-1 rounded-xl border border-neutral-300 dark:border-neutral-700 py-3 font-bold uppercase tracking-wider hover:bg-neutral-100 dark:hover:bg-neutral-900"
+                onClick={() => {
+                  const channel = getDataChannel();
+                  if (channel && channel.readyState === "open") {
+                    channel.send(
+                      JSON.stringify({
+                        type: "declined",
+                      })
+                    );
+                  }
+                  setIncomingTransfer(null);
+                }}
+              >
+                Decline
+              </button>
+
+              <button
+                className="flex-1 rounded-xl bg-black text-white dark:bg-white dark:text-black py-3 font-bold uppercase tracking-wider"
+                onClick={async () => {
+                  const channel = getDataChannel();
+                  if (!channel) return;
+
+                  let stream = null;
+
+                  if (typeof window !== "undefined" && "showSaveFilePicker" in window) {
+                    try {
+                      const handle = await (window as any).showSaveFilePicker({
+                        suggestedName: incomingTransfer.name,
+                      });
+                      stream = await handle.createWritable();
+                    } catch (err: any) {
+                      console.warn("showSaveFilePicker failed or was cancelled:", err);
+                      if (err.name === "AbortError") {
+                        if (channel.readyState === "open") {
+                          channel.send(
+                            JSON.stringify({
+                              type: "declined",
+                            })
+                          );
+                        }
+                        setIncomingTransfer(null);
+                        return;
+                      }
+                    }
+                  }
+
+                  if (stream) {
+                    setWritable(stream);
+                  }
+
+                  if (channel.readyState === "open") {
+                    channel.send(
+                      JSON.stringify({
+                        type: "ready",
+                      }),
+                    );
+                  }
+
+                  setIncomingTransfer(null);
+                }}
+              >
+                Accept
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
