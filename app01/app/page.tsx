@@ -18,7 +18,7 @@ export default function Home() {
   const [receiveProgress, setReceiveProgress] = useState(0);
 
   useEffect(() => {
-    console.log("1. Getting Peer");
+    
 const peer = getPeer();
 
 console.log("2. Peer Created");
@@ -84,8 +84,8 @@ socket.on("connect", () => {
         console.error("DataChannel Error", err);
       };
 
-      channel.onmessage = (event:MessageEvent) => {
-    handleIncomingData(event, (progress:number) => {
+      channel.onmessage = async (event:MessageEvent) => {
+    await handleIncomingData(event, (progress:number) => {
         console.log(progress);
         setReceiveProgress(progress);
     });
@@ -135,8 +135,8 @@ socket.on("connect", () => {
         channel.onerror = (err:Event) => {
           console.error(err);
         };
-        channel.onmessage = (event:MessageEvent) => {
-    handleIncomingData(event, (progress:number) => {
+        channel.onmessage =async (event:MessageEvent) => {
+        await handleIncomingData(event, (progress:number) => {
         console.log(progress);
         setReceiveProgress(progress);
     });
@@ -156,7 +156,6 @@ socket.on("connect", () => {
       }
     });
 
-
     socket.on("offer", async (offer) => {
       try {
         console.log("Offer Received");
@@ -175,9 +174,7 @@ socket.on("connect", () => {
       } catch (err) {
         console.error(err);
       }
-    });
-
-    
+    });   
 
     socket.on("answer", async (answer) => {
       try {

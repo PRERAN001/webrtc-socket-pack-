@@ -1,10 +1,141 @@
 import { getDataChannel } from "./channel";
 
 const CHUNK_SIZE = 16 * 1024;
+const MAX_BUFFER = 1024 * 1024; 
+
+export const sendFile = async (file, onProgress) => {
+  const channel = getDataChannel();
+
+  if (!channel) return;
+  if (channel.readyState !== "open") return;
+
+  channel.bufferedAmountLowThreshold = MAX_BUFFER / 2;
+
+  channel.send(
+    JSON.stringify({
+      type: "metadata",
+      name: file.name,
+      size: file.size,
+      mime: file.type,
+    }),
+  );
+
+  let offset = 0;
+
+  while (offset < file.size) {
+    
+    if (channel.bufferedAmount > MAX_BUFFER) {
+      await new Promise((resolve) => {
+        channel.onbufferedamountlow = () => {
+          channel.onbufferedamountlow = null;
+          resolve();
+        };
+      });
+    }
+
+    const chunk = await file
+      .slice(offset, offset + CHUNK_SIZE)
+      .arrayBuffer();
+
+    channel.send(chunk);
+
+    offset += chunk.byteLength;
+
+    const progress = Math.floor((offset / file.size) * 100);
+    onProgress(progress);
+  }
+
+  channel.send(
+    JSON.stringify({
+      type: "complete",
+    }),
+  );
+
+  console.log("File Sent");
+};
+
 
 let incomingFile = null;
-let receivedBuffers = [];
 let receivedSize = 0;
+
+let fileHandle = null;
+let writable = null;
+
+export const handleIncomingData = async (event, onProgress) => {
+ 
+  if (typeof event.data === "string") {
+    const data = JSON.parse(event.data);
+
+    switch (data.type) {
+      case "message":
+        console.log("💬", data.message);
+        return;
+
+      case "metadata":
+        incomingFile = data;
+        receivedSize = 0;
+
+        console.log("Receiving:", incomingFile.name);
+
+        
+        fileHandle = await window.showSaveFilePicker({
+          suggestedName: incomingFile.name,
+          types: [
+            {
+              description: incomingFile.mime,
+              accept: {
+                [incomingFile.mime]: [
+                  "." + incomingFile.name.split(".").pop(),
+                ],
+              },
+            },
+          ],
+        });
+
+        
+        writable = await fileHandle.createWritable();
+
+        console.log("Ready to receive.");
+
+        return;
+
+      case "complete":
+        console.log("Closing file...");
+
+        await writable.close();
+
+        console.log("✅ Download Complete");
+
+        writable = null;
+        fileHandle = null;
+        incomingFile = null;
+        receivedSize = 0;
+
+        return;
+    }
+  }
+
+  // Binary chunk
+
+  if (!writable) {
+    console.error("No writable stream.");
+    return;
+  }
+
+  await writable.write(event.data);
+
+  receivedSize += event.data.byteLength;
+
+  const progress = Math.floor(
+    (receivedSize / incomingFile.size) * 100
+  );
+
+  onProgress(progress);
+
+  console.log(
+    `${receivedSize}/${incomingFile.size} (${progress}%)`
+  );
+};
 
 export const sendMessage = (message) => {
   const channel = getDataChannel();
@@ -16,92 +147,4 @@ export const sendMessage = (message) => {
       message,
     }),
   );
-};
-
-export const sendFile = async (file, onProgress) => {
-  const channel = getDataChannel();
-
-  if (!channel) return;
-
-  if (channel.readyState !== "open") return;
-
-  channel.send(
-    JSON.stringify({
-      type: "metadata",
-      name: file.name,
-      size: file.size,
-      mime: file.type,
-    }),
-  );
-
-  const buffer = await file.arrayBuffer();
-
-  let offset = 0;
-
-  while (offset < buffer.byteLength) {
-    const chunk = buffer.slice(offset, offset + CHUNK_SIZE);
-
-    channel.send(chunk);
-
-    offset += CHUNK_SIZE;
-    const progress = Math.floor((offset / buffer.byteLength) * 100);
-
-    onProgress(progress);
-    console.log(`Sending: ${progress}%`);
-  }
-
-  channel.send(
-    JSON.stringify({
-      type: "complete",
-    }),
-  );
-};
-
-export const handleIncomingData = (event, onProgress) => {
-  if (typeof event.data === "string") {
-    const data = JSON.parse(event.data);
-
-    if (data.type === "message") {
-      console.log("💬", data.message);
-      return;
-    }
-
-    if (data.type === "metadata") {
-      incomingFile = data;
-      console.log("incomingFile",incomingFile);
-      receivedBuffers = [];
-      receivedSize = 0;
-
-      console.log("Receiving:", data.name);
-
-      return;
-    }
-
-    if (data.type === "complete") {
-      const blob = new Blob(receivedBuffers, {
-        type: incomingFile.mime,
-      });
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = incomingFile.name;
-      a.click();
-      URL.revokeObjectURL(url);
-      console.log("Download Complete");
-      return;
-    }
-  }
-  console.log(event.data);
-  console.log(event.data.constructor.name);
-  receivedBuffers.push(event.data);
-
-  receivedSize += event.data.byteLength;
-  const progress = Math.floor((receivedSize / incomingFile.size) * 100);
-
-  onProgress(progress);
-
-  console.log(progress + "%");
-
-  console.log(`${receivedSize}/${incomingFile.size}`);
 };
